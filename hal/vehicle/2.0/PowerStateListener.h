@@ -14,28 +14,26 @@
  * limitations under the License.
  */
 
-cc_binary {
-    name: "android.hardware.dumpstate@1.1-service.trout",
-    srcs: [
-        "DumpstateDevice.cpp",
-        "service.cpp",
-    ],
-    static_libs: [
-        "android.hardware.automotive@libc++fs",
-    ],
-    shared_libs: [
-        "android.hardware.dumpstate@1.0",
-        "android.hardware.dumpstate@1.1",
-        "libbase",
-        "libcutils",
-        "libdumpstateutil",
-        "libhidlbase",
-        "liblog",
-        "libutils",
-    ],
-    relative_install_path: "hw",
-    init_rc: [
-        "android.hardware.dumpstate@1.1-service.trout.rc",
-    ],
-    defaults: ["cuttlefish_guest_only"]
-}
+#pragma once
+
+#include <string>
+
+namespace android::hardware::automotive::vehicle::V2_0::impl {
+
+/**
+ *  Listen on a Unix socket for power state updates, and change the power
+ *  state marker file accordingly.
+ */
+class PowerStateListener {
+  public:
+    // TODO(chenhaosjtuacm): use std::filesystem::path when available
+    PowerStateListener(const std::string& socketPath, const std::string& powerStateMarkerFilePath);
+
+    void Listen();
+
+  private:
+    const std::string mSocketPath;
+    const std::string mPowerStateMarkerFilePath;
+};
+
+}  // namespace android::hardware::automotive::vehicle::V2_0::impl
