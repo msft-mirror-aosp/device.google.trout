@@ -35,6 +35,7 @@ static const char* IIO_SCALE_FILENAME = "_scale";
 static const char* IIO_SAMPLING_FREQUENCY = "_sampling_frequency";
 static const char* IIO_BUFFER_ENABLE = "buffer/enable";
 static const char* IIO_POWER_FILENAME = "sensor_power";
+static const char* IIO_MAX_RANGE_FILENAME = "sensor_max_range";
 
 namespace android {
 namespace hardware {
@@ -64,18 +65,7 @@ static bool str_has_suffix(const char* s, const char* suffix) {
     return std::equal(s + len_s - len_suffix, s + len_s, suffix);
 }
 
-static int sysfs_opendir(const std::string& name, DirPtr* dp);
-static int sysfs_write_uint(const std::string& file, const unsigned int val);
-static int sysfs_read_uint8(const std::string& file, uint8_t* val);
-static int sysfs_read_str(const std::string& file, std::string* str);
-static int sysfs_read_float(const std::string& file, float* val);
-static int get_scan_type(const std::string& device_dir, struct iio_info_channel* chanInfo);
-static int get_sampling_frequency_available(const std::string& device_dir,
-                                            std::vector<double>* sfa);
-static int get_scale(const std::string& device_dir, float* resolution);
-static int check_file(const std::string& filename);
-
-int sysfs_opendir(const std::string& name, DirPtr* dp) {
+static int sysfs_opendir(const std::string& name, DirPtr* dp) {
     if (dp == nullptr) {
         return -EINVAL;
     }
@@ -99,49 +89,54 @@ int sysfs_opendir(const std::string& name, DirPtr* dp) {
     return 0;
 }
 
-int sysfs_write_uint(const std::string& file, const unsigned int val) {
-    FilePtr fp = {fopen(file.c_str(), "r+"), fclose};
+// TODO(egranata): could this (and _read_ below), infer the fmt string directly
+// from the type of value being passed in? that would be a safer alternative
+template <typename T>
+static int sysfs_write_val(const std::string& f, const std::string& fmt, const T value) {
+    FilePtr fp = {fopen(f.c_str(), "r+"), fclose};
     if (nullptr == fp) return -errno;
 
-    fprintf(fp.get(), "%u", val);
+    fprintf(fp.get(), fmt.c_str(), value);
 
     return 0;
 }
 
-int sysfs_write_double(const std::string& file, const double val) {
-    FilePtr fp = {fopen(file.c_str(), "r+"), fclose};
-    if (nullptr == fp) return -errno;
-
-    fprintf(fp.get(), "%f", val);
-
-    return 0;
+static int sysfs_write_uint(const std::string& file, const unsigned int val) {
+    return sysfs_write_val(file, "%u", val);
 }
 
-int sysfs_read_uint8(const std::string& file, uint8_t* val) {
-    if (val == nullptr) {
-        return -EINVAL;
-    }
+static int sysfs_write_double(const std::string& file, const double val) {
+    return sysfs_write_val(file, "%f", val);
+}
 
-    FilePtr fp = {fopen(file.c_str(), "r"), fclose};
+template <typename T>
+static int sysfs_read_val(const std::string& f, const std::string& fmt, const T* value) {
+    if (!value) return -EINVAL;
+
+    FilePtr fp = {fopen(f.c_str(), "r"), fclose};
     if (nullptr == fp) return -errno;
 
-    const int ret = fscanf(fp.get(), "%hhu\n", val);
+    const int ret = fscanf(fp.get(), fmt.c_str(), value);
     return (ret == 1) ? 0 : -EINVAL;
 }
 
-int sysfs_read_uint(const std::string& file, unsigned int* val) {
-    if (val == nullptr) {
-        return -EINVAL;
-    }
-
-    FilePtr fp = {fopen(file.c_str(), "r"), fclose};
-    if (nullptr == fp) return -errno;
-
-    const int ret = fscanf(fp.get(), "%u\n", val);
-    return (ret == 1) ? 0 : -EINVAL;
+static int sysfs_read_uint8(const std::string& file, uint8_t* val) {
+    return sysfs_read_val(file, "%hhu\n", val);
 }
 
-int sysfs_read_str(const std::string& file, std::string* str) {
+static int sysfs_read_uint(const std::string& file, unsigned int* val) {
+    return sysfs_read_val(file, "%u\n", val);
+}
+
+static int sysfs_read_float(const std::string& file, float* val) {
+    return sysfs_read_val(file, "%f\n", val);
+}
+
+static int sysfs_read_int64(const std::string& file, int64_t* val) {
+    return sysfs_read_val(file, "%lld\n", val);
+}
+
+static int sysfs_read_str(const std::string& file, std::string* str) {
     std::ifstream infile(file);
     if (!infile.is_open()) return -EINVAL;
 
@@ -151,19 +146,7 @@ int sysfs_read_str(const std::string& file, std::string* str) {
         return 0;
 }
 
-int sysfs_read_float(const std::string& file, float* val) {
-    if (val == nullptr) {
-        return -EINVAL;
-    }
-
-    FilePtr fp = {fopen(file.c_str(), "r"), fclose};
-    if (nullptr == fp) return -errno;
-
-    const int ret = fscanf(fp.get(), "%f", val);
-    return (ret == 1) ? 0 : -EINVAL;
-}
-
-int check_file(const std::string& filename) {
+static int check_file(const std::string& filename) {
     struct stat info;
     return stat(filename.c_str(), &info);
 }
@@ -180,7 +163,8 @@ int enable_sensor(const std::string& device_dir, const bool enable) {
     return err;
 }
 
-int get_sampling_frequency_available(const std::string& device_dir, std::vector<double>* sfa) {
+static int get_sampling_frequency_available(const std::string& device_dir,
+                                            std::vector<double>* sfa) {
     int ret = 0;
     char* rest;
     std::string line;
@@ -200,12 +184,20 @@ int get_sampling_frequency_available(const std::string& device_dir, std::vector<
     return ret < 0 ? ret : 0;
 }
 
-int get_sensor_power(const std::string& device_dir, unsigned int* power) {
+static int get_sensor_power(const std::string& device_dir, unsigned int* power) {
     std::string filename = device_dir;
     filename += "/";
     filename += IIO_POWER_FILENAME;
 
     return sysfs_read_uint(filename, power);
+}
+
+static int get_sensor_max_range(const std::string& device_dir, int64_t* max_range) {
+    std::string filename = device_dir;
+    filename += "/";
+    filename += IIO_MAX_RANGE_FILENAME;
+
+    return sysfs_read_int64(filename, max_range);
 }
 
 int set_sampling_frequency(const std::string& device_dir, const double frequency) {
@@ -225,7 +217,7 @@ int set_sampling_frequency(const std::string& device_dir, const double frequency
     return ret;
 }
 
-int get_scale(const std::string& device_dir, float* resolution) {
+static int get_scale(const std::string& device_dir, float* resolution) {
     DirPtr dp(nullptr, closedir);
     const struct dirent* ent;
     int err;
@@ -307,7 +299,11 @@ int load_iio_devices(std::vector<iio_device_data>* iio_data,
             ALOGE("get_sensor_power for %s returned error %d", path_device.c_str(), err);
             continue;
         }
-
+        err = get_sensor_max_range(iio_dev_data.sysfspath, &iio_dev_data.max_range);
+        if (err) {
+            ALOGE("get_sensor_max_range for %s returned error %d", path_device.c_str(), err);
+            continue;
+        }
         sscanf(ent->d_name + iio_base_len, "%hhu", &iio_dev_data.iio_dev_num);
 
         iio_data->push_back(iio_dev_data);
@@ -315,7 +311,7 @@ int load_iio_devices(std::vector<iio_device_data>* iio_data,
     return err;
 }
 
-int get_scan_type(const std::string& device_dir, struct iio_info_channel* chanInfo) {
+static int get_scan_type(const std::string& device_dir, struct iio_info_channel* chanInfo) {
     DirPtr dp(nullptr, closedir);
     const struct dirent* ent;
     std::string scan_dir;
