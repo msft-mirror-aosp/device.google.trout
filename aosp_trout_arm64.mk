@@ -14,19 +14,33 @@
 # limitations under the License.
 #
 
-# Vehicle HAL
-LOCAL_VHAL_PRODUCT_PACKAGE := android.hardware.automotive.vehicle@2.0-virtualization-service android.hardware.automotive.vehicle@2.0-virtualization-grpc-server
-PRODUCT_PROPERTY_OVERRIDES += \
-	ro.vendor.vehiclehal.server.cid=2 \
-	ro.vendor.vehiclehal.server.port=9210 \
-
 $(call inherit-product, device/google/cuttlefish/vsoc_arm64/auto/aosp_cf.mk)
 
-PRODUCT_COPY_FILES += \
-    device/google/trout/rootdir/etc/ueventd.rc:$(TARGET_COPY_OUT_ODM)/ueventd.rc \
+# Audio Control HAL
+# TODO (chenhaosjtuacm, egranata): move them to kernel command line
+LOCAL_AUDIOCONTROL_PROPERTIES ?= \
+    ro.vendor.audiocontrol.server.cid=1000 \
+    ro.vendor.audiocontrol.server.port=9410 \
+
+include device/google/trout/aosp_trout_common.mk
+
+DEVICE_MANIFEST_FILE += device/google/trout/manifest.xml
+
+# Sensor HAL
+# The implementations use SCMI, which only works on arm architecture
+LOCAL_SENSOR_PRODUCT_PACKAGE ?= \
+    android.hardware.sensors@2.0-service.multihal \
+    android.hardware.sensors@2.0-service.multihal.rc \
+    android.hardware.sensors@2.0-Google-IIO-Subhal \
+
+LOCAL_SENSOR_FILE_OVERRIDES := true
 
 PRODUCT_COPY_FILES += \
-    device/google/trout/config/input-port-associations.xml:$(TARGET_COPY_OUT_VENDOR)/etc/input-port-associations.xml \
+    device/google/trout/product_files/odm/ueventd.rc:$(TARGET_COPY_OUT_ODM)/ueventd.rc \
+    device/google/trout/product_files/odm/usr/idc/Vendor_0fff_Product_0fff.idc:$(TARGET_COPY_OUT_ODM)/usr/idc/Vendor_0fff_Product_0fff.idc \
+    device/google/trout/product_files/vendor/etc/sensors/hals.conf:$(TARGET_COPY_OUT_VENDOR)/etc/sensors/hals.conf \
+    frameworks/native/data/etc/android.hardware.sensor.gyroscope.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.sensor.gyroscope.xml \
+    frameworks/native/data/etc/android.hardware.sensor.accelerometer.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.sensor.accelerometer.xml \
 
 PRODUCT_NAME := aosp_trout_arm64
 PRODUCT_DEVICE := vsoc_arm64

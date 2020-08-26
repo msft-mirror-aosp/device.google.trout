@@ -15,26 +15,91 @@
 cc_library_static {
     name: "android.hardware.automotive.vehicle@2.0-virtualization-utils",
     vendor: true,
+    host_supported: true,
     defaults: ["vhal_v2_0_defaults"],
     srcs: [
         "Utils.cpp",
+    ],
+    static_libs: [
+        "android.hardware.automotive.utils.vsockinfo",
     ],
     shared_libs: [
         "libbase",
     ],
 }
 
+cc_library_static {
+    name: "android.hardware.automotive.vehicle@2.0-grpc-trout",
+    vendor: true,
+    host_supported: true,
+    include_dirs: [
+        "external/protobuf/src",
+    ],
+    generated_headers: [
+        "DefaultVehicleHalProtoStub_h",
+        "VehicleServerProtoStub_h",
+    ],
+    export_generated_headers: [
+        "DefaultVehicleHalProtoStub_h",
+        "VehicleServerProtoStub_h",
+    ],
+    generated_sources: [
+        "DefaultVehicleHalProtoStub_cc",
+        "VehicleServerProtoStub_cc",
+    ],
+    shared_libs: [
+        "libgrpc++_unsecure",
+    ],
+    cflags: [
+        "-Wno-unused-parameter",
+    ],
+}
+
+genrule {
+    name: "VehicleServerProtoStub_h",
+    tools: [
+        "aprotoc",
+        "protoc-gen-grpc-cpp-plugin",
+    ],
+    cmd: "$(location aprotoc) -I$$(dirname $(in)) -Ihardware/interfaces/automotive/vehicle/2.0/default/impl/vhal_v2_0/proto -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin) $(in) --grpc_out=$(genDir) --cpp_out=$(genDir)",
+    srcs: [
+        "proto/VehicleServer.proto",
+    ],
+    out: [
+        "VehicleServer.pb.h",
+        "VehicleServer.grpc.pb.h",
+    ],
+}
+
+genrule {
+    name: "VehicleServerProtoStub_cc",
+    tools: [
+        "aprotoc",
+        "protoc-gen-grpc-cpp-plugin",
+    ],
+    cmd: "$(location aprotoc) -I$$(dirname $(in)) -Ihardware/interfaces/automotive/vehicle/2.0/default/impl/vhal_v2_0/proto -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin) $(in) --grpc_out=$(genDir) --cpp_out=$(genDir)",
+    srcs: [
+        "proto/VehicleServer.proto",
+    ],
+    out: [
+        "VehicleServer.pb.cc",
+        "VehicleServer.grpc.pb.cc",
+    ],
+}
+
 cc_binary {
     name: "android.hardware.automotive.vehicle@2.0-virtualization-service",
-    defaults: ["vhal_v2_0_defaults"],
+    defaults: ["vhal_v2_0_target_defaults"],
     init_rc: ["android.hardware.automotive.vehicle@2.0-virtualization-service.rc"],
     vendor: true,
     relative_install_path: "hw",
     srcs: [
         "GrpcVehicleClient.cpp",
         "VirtualizedVehicleService.cpp",
+        "WatchdogClient.cpp",
     ],
     shared_libs: [
+        "android.hardware.automotive.utils.watchdog",
         "libbase",
         "libcutils",
         "libjsoncpp",
@@ -42,25 +107,29 @@ cc_binary {
         "libgrpc++",
     ],
     static_libs: [
+        "android.hardware.automotive.utils.vsockinfo",
         "android.hardware.automotive.vehicle@2.0-manager-lib",
         "android.hardware.automotive.vehicle@2.0-default-impl-lib",
-        "android.hardware.automotive.vehicle@2.0-grpc",
+        "android.hardware.automotive.vehicle@2.0-grpc-trout",
         "android.hardware.automotive.vehicle@2.0-virtualization-utils",
         "libqemu_pipe",
     ],
     cflags: [
         "-Wno-unused-parameter",
     ],
+    vintf_fragments: ["manifest_android.hardware.automotive.vehicle@2.0-virtualization-service.xml"],
 }
 
 cc_binary {
     name: "android.hardware.automotive.vehicle@2.0-virtualization-grpc-server",
     init_rc: ["android.hardware.automotive.vehicle@2.0-virtualization-grpc-server.rc"],
     defaults: ["vhal_v2_0_defaults"],
+    host_supported: true,
     vendor: true,
-    relative_install_path: "hw",
     srcs: [
+        "GarageModeServerSideHandler.cpp",
         "GrpcVehicleServer.cpp",
+        "PowerStateListener.cpp",
         "VirtualizationGrpcServer.cpp",
     ],
     shared_libs: [
@@ -70,9 +139,9 @@ cc_binary {
         "libgrpc++",
     ],
     static_libs: [
-        "android.hardware.automotive.vehicle@2.0-manager-lib",
-        "android.hardware.automotive.vehicle@2.0-default-impl-lib",
-        "android.hardware.automotive.vehicle@2.0-grpc",
+        "android.hardware.automotive.utils.vsockinfo",
+        "android.hardware.automotive.vehicle@2.0-server-impl-lib",
+        "android.hardware.automotive.vehicle@2.0-grpc-trout",
         "android.hardware.automotive.vehicle@2.0-virtualization-utils",
     ],
     cflags: [

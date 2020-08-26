@@ -22,8 +22,11 @@
 #include <android-base/logging.h>
 #include <grpc++/grpc++.h>
 
+#include "GarageModeServerSideHandler.h"
+#include "PowerStateListener.h"
 #include "VehicleServer.grpc.pb.h"
 #include "VehicleServer.pb.h"
+#include "vhal_v2_0/DefaultConfig.h"
 #include "vhal_v2_0/ProtoMessageConverter.h"
 
 namespace android {
@@ -36,15 +39,21 @@ namespace impl {
 
 class GrpcVehicleServerImpl : public GrpcVehicleServer, public vhal_proto::VehicleServer::Service {
   public:
-    GrpcVehicleServerImpl(const std::string& addr) : mServiceAddr(addr) {
+    explicit GrpcVehicleServerImpl(const VirtualizedVhalServerInfo& serverInfo)
+        : mServiceAddr(serverInfo.getServerUri()),
+          mGarageModeHandler(makeGarageModeServerSideHandler(this, &mValueObjectPool,
+                                                             serverInfo.powerStateMarkerFilePath)),
+          mPowerStateListener(serverInfo.powerStateSocket, serverInfo.powerStateMarkerFilePath) {
         setValuePool(&mValueObjectPool);
     }
 
     // method from GrpcVehicleServer
     void Start() override;
 
-    // method from IVehicleServer
+    // methods from IVehicleServer
     void onPropertyValueFromCar(const VehiclePropValue& value, bool updateStatus) override;
+
+    StatusCode onSetProperty(const VehiclePropValue& value, bool updateStatus) override;
 
     // methods from vhal_proto::VehicleServer::Service
 
@@ -67,7 +76,7 @@ class GrpcVehicleServerImpl : public GrpcVehicleServer, public vhal_proto::Vehic
     struct ConnectionDescriptor {
         using ValueWriterType = std::function<bool(const vhal_proto::WrappedVehiclePropValue&)>;
 
-        ConnectionDescriptor(ValueWriterType&& value_writer)
+        explicit ConnectionDescriptor(ValueWriterType&& value_writer)
             : mValueWriter(std::move(value_writer)),
               mConnectionID(CONNECTION_ID_COUNTER.fetch_add(1)) {}
 
@@ -94,6 +103,8 @@ class GrpcVehicleServerImpl : public GrpcVehicleServer, public vhal_proto::Vehic
 
     std::string mServiceAddr;
     VehiclePropValuePool mValueObjectPool;
+    std::unique_ptr<GarageModeServerSideHandler> mGarageModeHandler;
+    PowerStateListener mPowerStateListener;
     mutable std::shared_mutex mConnectionMutex;
     mutable std::shared_mutex mWriterMutex;
     std::list<ConnectionDescriptor> mValueStreamingConnections;
@@ -106,8 +117,8 @@ static std::shared_ptr<::grpc::ServerCredentials> getServerCredentials() {
     return ::grpc::InsecureServerCredentials();
 }
 
-GrpcVehicleServerPtr makeGrpcVehicleServer(const std::string& addr) {
-    return std::make_unique<GrpcVehicleServerImpl>(addr);
+GrpcVehicleServerPtr makeGrpcVehicleServer(const VirtualizedVhalServerInfo& serverInfo) {
+    return std::make_unique<GrpcVehicleServerImpl>(serverInfo);
 }
 
 void GrpcVehicleServerImpl::Start() {
@@ -116,7 +127,13 @@ void GrpcVehicleServerImpl::Start() {
     builder.AddListeningPort(mServiceAddr, getServerCredentials());
     std::unique_ptr<::grpc::Server> server(builder.BuildAndStart());
 
+    CHECK(server) << __func__ << ": failed to create the GRPC server, "
+                  << "please make sure the configuration and permissions are correct";
+
+    std::thread powerStateListenerThread([this]() { mPowerStateListener.Listen(); });
+
     server->Wait();
+    powerStateListenerThread.join();
 }
 
 void GrpcVehicleServerImpl::onPropertyValueFromCar(const VehiclePropValue& value,
@@ -153,6 +170,14 @@ void GrpcVehicleServerImpl::onPropertyValueFromCar(const VehiclePropValue& value
             ++itr;
         }
     }
+}
+
+StatusCode GrpcVehicleServerImpl::onSetProperty(const VehiclePropValue& value, bool updateStatus) {
+    if (value.prop == AP_POWER_STATE_REPORT &&
+        value.value.int32Values[0] == toInt(VehicleApPowerStateReport::SHUTDOWN_POSTPONE)) {
+        mGarageModeHandler->HandleHeartbeat();
+    }
+    return GrpcVehicleServer::onSetProperty(value, updateStatus);
 }
 
 ::grpc::Status GrpcVehicleServerImpl::GetAllPropertyConfig(
