@@ -32,6 +32,8 @@ target_compile_options(dumpstate_protobuf_gen PRIVATE ${_dumpstate_CXX_FLAGS} -W
 add_executable(dumpstate_grpc_server
     ${dumpstate_SRC_ROOT}/DumpstateGrpcServer.cpp
     ${dumpstate_SRC_ROOT}/server_main.cpp
+    ${dumpstate_SRC_ROOT}/ServiceDescriptor.cpp
+    ${dumpstate_SRC_ROOT}/ServiceSupplier.cpp
 )
 
 target_include_directories(dumpstate_grpc_server
