@@ -1,4 +1,4 @@
-// Copyright (C) 2020 The Android Open Source Project
+// Copyright (C) 2021 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package {
-    default_applicable_licenses: ["Android-Apache-2.0"],
-}
-
-android_test {
-    name: "TroutDumpstateTest",
-    srcs: ["src/**/*.java"],
-    sdk_version: "current",
-    libs: ["hwbinder.stubs"],
-    static_libs: [
-        "android.hardware.dumpstate-V1.1-java",
-        "androidx.test.rules",
-        "apache-commons-compress",
+cc_test {
+    name: "android.hardware.automotive.vehicle@2.0-virtualization-server-unit-tests",
+    vendor: true,
+    defaults: ["vhal_v2_0_defaults"],
+    srcs: [
+        "GrpcServer_test.cpp",
     ],
-    certificate: "platform",
-    test_suites: ["device-tests"],
+    static_libs: [
+        "android.hardware.automotive.vehicle@2.0-virtualization-client-lib",
+        "android.hardware.automotive.vehicle@2.0-virtualization-grpc-server-lib",
+    ],
+    shared_libs: [
+        "libbase",
+        "libjsoncpp",
+        "libprotobuf-cpp-full",
+        "libgrpc++",
+    ],
 }
