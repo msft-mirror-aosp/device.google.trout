@@ -14,10 +14,21 @@
 # limitations under the License.
 #
 
+BOARD_WITHOUT_RADIO ?= true
+ifeq ($(BOARD_WITHOUT_RADIO),true)
+   PRODUCT_PACKAGE_OVERLAYS += device/google/trout/product_files/bluetooth/overlay
+endif
+
+TARGET_USES_CF_RILD ?= false
+
 $(call inherit-product, device/google/cuttlefish/vsoc_arm64/auto/aosp_cf.mk)
 
 # Package ramdisk.img in target package
 BOARD_IMG_USE_RAMDISK := true
+
+# Kernel
+
+TARGET_KERNEL_PATH ?= device/google/trout-kernel/$(TARGET_KERNEL_USE)-arm64/Image
 
 # Audio HAL
 TARGET_USES_CUTTLEFISH_AUDIO ?= false
@@ -31,6 +42,12 @@ LOCAL_AUDIOCONTROL_PROPERTIES ?= \
 include device/google/trout/aosp_trout_common.mk
 
 DEVICE_MANIFEST_FILE += device/google/trout/manifest.xml
+
+PRODUCT_PROPERTY_OVERRIDES += \
+	vendor.ser.bt-uart?= \
+
+PRODUCT_PACKAGES += \
+	vport_trigger \
 
 # Sensor HAL
 # The implementations use SCMI, which only works on arm architecture
