@@ -36,12 +36,18 @@ endif
 
 # Audio HAL
 TARGET_USES_CUTTLEFISH_AUDIO ?= false
+AUDIO_FEATURE_HFP_ENABLED ?= true
 
 # Audio Control HAL
 # TODO (chenhaosjtuacm, egranata): move them to kernel command line
 LOCAL_AUDIOCONTROL_PROPERTIES ?= \
     ro.vendor.audiocontrol.server.cid=1000 \
     ro.vendor.audiocontrol.server.port=9410 \
+
+# Tracing Server Address
+LOCAL_TRACING_SERVER_PROPERTIES ?= \
+    ro.vendor.tracing.server.cid=1000 \
+    ro.vendor.tracing.server.port=9510 \
 
 include device/google/trout/aosp_trout_common.mk
 
