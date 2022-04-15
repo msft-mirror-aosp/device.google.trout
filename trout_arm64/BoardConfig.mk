@@ -22,9 +22,10 @@ TARGET_USERIMAGES_SPARSE_F2FS_DISABLED ?= false
 #
 # arm64 target for Trout
 #
--include device/google/cuttlefish/vsoc_arm64/BoardConfig.mk
 
 BOARD_BOOT_HEADER_VERSION := 3
+
+-include device/google/cuttlefish/vsoc_arm64/BoardConfig.mk
 
 # Android Bluetooth stack configuration
 LOCAL_BLUETOOTH_BDROID_BUILDCFG_INCLUDE_DIR ?= device/google/trout/product_files/bluetooth
