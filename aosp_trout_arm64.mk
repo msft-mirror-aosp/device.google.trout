@@ -24,22 +24,35 @@ BOARD_IMG_USE_RAMDISK := true
 # Kernel - prefer version 5.10 by default for trout
 TARGET_KERNEL_USE ?= 5.10
 
+TROUT_KERNEL_DIR ?= $(wildcard device/google/trout-kernel/$(TARGET_KERNEL_USE)-arm64)
+
 # Currently, the trout kernel prebuilt is not being distributed to partners and AOSP,
 # and thus we cannot rely on it existing outside of Google-internal builds. Make sure not to try
 # and include a missing kernel image.
-TROUT_KERNEL_IMAGE := $(wildcard device/google/trout-kernel/$(TARGET_KERNEL_USE)-arm64/Image)
+TROUT_KERNEL_IMAGE := $(wildcard $(TROUT_KERNEL_DIR)/Image)
 ifneq ($(TROUT_KERNEL_IMAGE),)
 TARGET_KERNEL_PATH ?= $(TROUT_KERNEL_IMAGE)
 endif
 
+TROUT_KO_DIR ?= $(TROUT_KERNEL_DIR)
+ifneq ($(TROUT_KO_DIR),)
+BOARD_VENDOR_RAMDISK_KERNEL_MODULES := $(wildcard $(TROUT_KO_DIR)/*.ko)
+endif
+
 # Audio HAL
 TARGET_USES_CUTTLEFISH_AUDIO ?= false
+AUDIO_FEATURE_HFP_ENABLED ?= true
 
 # Audio Control HAL
 # TODO (chenhaosjtuacm, egranata): move them to kernel command line
 LOCAL_AUDIOCONTROL_PROPERTIES ?= \
     ro.vendor.audiocontrol.server.cid=1000 \
     ro.vendor.audiocontrol.server.port=9410 \
+
+# Tracing Server Address
+LOCAL_TRACING_SERVER_PROPERTIES ?= \
+    ro.vendor.tracing.server.cid=1000 \
+    ro.vendor.tracing.server.port=9510 \
 
 include device/google/trout/aosp_trout_common.mk
 
