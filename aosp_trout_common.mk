@@ -72,8 +72,8 @@ PRODUCT_COPY_FILES += \
     device/google/trout/product_files/etc/automotive/evs/config_override.json:${TARGET_COPY_OUT_SYSTEM}/etc/automotive/evs/config_override.json \
     device/google/trout/product_files/vendor/etc/automotive/evs/evs_configuration_override.xml:$(TARGET_COPY_OUT_VENDOR)/etc/automotive/evs/evs_configuration_override.xml \
 
-# Disable Vulkan feature flag as it is not supported on trout
-TARGET_VULKAN_SUPPORT := false
+# A device inheriting trout can enable Vulkan support.
+TARGET_VULKAN_SUPPORT ?= false
 
 PRODUCT_PROPERTY_OVERRIDES += \
     ro.hardware.type=automotive \
